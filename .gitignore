@@ -1,0 +1,7 @@
+.env*
+anon.session*
+
+
+# dir
+data/
+projects/
