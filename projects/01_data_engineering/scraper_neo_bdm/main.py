@@ -21,7 +21,7 @@ class NeoBDMScraper:
         self.password = password
         self.driver = None
         self.wait = None
-        self.output_dir = "/Users/albert/Documents/Finances/data/raw/market_data/bandarmology/09_feb_2026"
+        self.output_dir = "/Users/albert/Documents/Finances/data/raw/market_data/bandarmology/13_feb_2026"
         self.setup_driver(headless)
         
     def setup_driver(self, headless=False):
@@ -463,8 +463,8 @@ def main():
     print("="*70)
     
     # Konfigurasi
-    USERNAME = os.getenv(USERNAME)
-    PASSWORD = os.getenv(PASSWORD)
+    USERNAME = os.getenv("USERNAME")
+    PASSWORD = os.getenv("PASSWORD")
     
     # Inisialisasi scraper
     print("\n" + "="*60)

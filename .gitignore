@@ -2,6 +2,9 @@
 anon.session*
 
 
-# dir
-data/
-projects/
+.venv/
+.gitignore
+
+*log*
+
+node_modules/

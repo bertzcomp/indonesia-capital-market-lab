@@ -1,0 +1,12 @@
+{
+  "total_records": 30,
+  "unique_emiten": 30,
+  "date_range": {
+    "min": "2026-02-10",
+    "max": "2026-02-10"
+  },
+  "pdf_count": 30,
+  "total_attachments": 35,
+  "total_pages": 3,
+  "scraped_at": "2026-02-10T23:32:30.953830"
+}
