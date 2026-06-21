@@ -1,0 +1,739 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import json
+import re
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple
+from urllib.parse import quote
+
+import pandas as pd
+import streamlit as st
+
+
+SIGNAL_FILES = {
+    "numeric_plan": "numeric_trade_plan.csv",
+    "numeric_plan_json": "numeric_trade_plan.json",
+    "numeric_report": "numeric_trading_report.md",
+    "numeric_meta": "numeric_trade_report_meta.json",
+    "narrative_cards": "narrative_signal_cards.csv",
+    "narrative_cards_json": "narrative_signal_cards.json",
+    "narrative_report": "narrative_trading_report.md",
+    "execution": "execution_shortlist.csv",
+    "signals_main": "signals_main.csv",
+    "watchlist": "all_strategy_watchlist.csv",
+    "candidates": "all_strategy_candidates.csv",
+    "all_scores": "all_scores.csv",
+    "diagnostics": "diagnostics.json",
+    "profile_meta": "profile_output_meta.json",
+    "report": "report.md",
+}
+
+IGNORE_STRATEGY_FILES = {
+    "all_scores.csv",
+    "all_strategy_candidates.csv",
+    "all_strategy_watchlist.csv",
+    "execution_shortlist.csv",
+    "signals_main.csv",
+    "numeric_trade_plan.csv",
+    "narrative_signal_cards.csv",
+}
+
+
+@dataclass
+class SignalProfile:
+    signal_name: str
+    profile: str
+    path: Path
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--root", default=".")
+    return parser.parse_args()
+
+
+def normalize_signal_label(name: str) -> str:
+    return name.replace("signal_", "").replace("_", " ").title()
+
+
+def signal_sort_key(path: Path) -> Tuple[int, int, int, str]:
+    m = re.match(r"signal_(\d{1,2})_([a-zA-Z]+)_(\d{4})$", path.name)
+    if not m:
+        return (0, 0, 0, path.name)
+    months = {
+        "jan": 1, "january": 1,
+        "feb": 2, "february": 2,
+        "mar": 3, "march": 3,
+        "apr": 4, "april": 4,
+        "may": 5,
+        "jun": 6, "june": 6,
+        "jul": 7, "july": 7,
+        "aug": 8, "august": 8,
+        "sep": 9, "sept": 9, "september": 9,
+        "oct": 10, "october": 10,
+        "nov": 11, "november": 11,
+        "dec": 12, "december": 12,
+    }
+    day = int(m.group(1))
+    month = months.get(m.group(2).lower(), 0)
+    year = int(m.group(3))
+    return (year, month, day, path.name)
+
+
+def profile_sort_key(name: str) -> Tuple[int, str]:
+    order = {"base_model": 0, "continual_model": 1, "default": 9}
+    return (order.get(name, 5), name)
+
+
+def has_signal_artifacts(path: Path) -> bool:
+    return any((path / fname).exists() for fname in SIGNAL_FILES.values() if fname.endswith((".csv", ".json", ".md")))
+
+
+def discover_signal_profiles(root: Path) -> Dict[str, List[SignalProfile]]:
+    daily = root / "signals" / "daily"
+    out: Dict[str, List[SignalProfile]] = {}
+    if not daily.exists():
+        return out
+    for sig_dir in sorted([p for p in daily.iterdir() if p.is_dir() and p.name.startswith("signal_")], key=signal_sort_key, reverse=True):
+        profiles: List[SignalProfile] = []
+        if has_signal_artifacts(sig_dir):
+            profiles.append(SignalProfile(sig_dir.name, "default", sig_dir))
+        for child in sorted([p for p in sig_dir.iterdir() if p.is_dir()], key=lambda x: profile_sort_key(x.name)):
+            if has_signal_artifacts(child):
+                profiles.append(SignalProfile(sig_dir.name, child.name, child))
+        if profiles:
+            out[sig_dir.name] = profiles
+    return out
+
+
+@st.cache_data(show_spinner=False)
+def read_csv_cached(path: str) -> pd.DataFrame:
+    p = Path(path)
+    if not p.exists():
+        return pd.DataFrame()
+    try:
+        return pd.read_csv(p)
+    except Exception:
+        return pd.DataFrame()
+
+
+@st.cache_data(show_spinner=False)
+def read_text_cached(path: str) -> str:
+    p = Path(path)
+    if not p.exists():
+        return ""
+    try:
+        return p.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        return p.read_text(errors="ignore")
+
+
+@st.cache_data(show_spinner=False)
+def read_json_cached(path: str):
+    p = Path(path)
+    if not p.exists():
+        return {}
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def load_df(sig_path: Path, key: str) -> pd.DataFrame:
+    fname = SIGNAL_FILES.get(key)
+    if not fname:
+        return pd.DataFrame()
+    return read_csv_cached(str(sig_path / fname))
+
+
+def load_text(sig_path: Path, key: str) -> str:
+    fname = SIGNAL_FILES.get(key)
+    if not fname:
+        return ""
+    return read_text_cached(str(sig_path / fname))
+
+
+def load_json(sig_path: Path, key: str):
+    fname = SIGNAL_FILES.get(key)
+    if not fname:
+        return {}
+    return read_json_cached(str(sig_path / fname))
+
+
+def pick_col(df: pd.DataFrame, options: List[str]) -> Optional[str]:
+    for c in options:
+        if c in df.columns:
+            return c
+    return None
+
+
+def safe_num(x, default=None):
+    try:
+        if pd.isna(x):
+            return default
+        return float(x)
+    except Exception:
+        return default
+
+
+def fmt_num(x, digits=2, suffix=""):
+    v = safe_num(x)
+    if v is None:
+        return "—"
+    if abs(v) >= 1000:
+        return f"{v:,.0f}{suffix}"
+    return f"{v:.{digits}f}{suffix}"
+
+
+def table_cols(df: pd.DataFrame, cols: List[str]) -> pd.DataFrame:
+    keep = [c for c in cols if c in df.columns]
+    return df[keep] if keep else df
+
+
+def status_badge_text(row: pd.Series) -> str:
+    flags = str(row.get("risk_flags", "OK") or "OK")
+    quality = str(row.get("plan_quality", row.get("confidence", "")) or "")
+    enabled = row.get("execution_enabled", None)
+    if enabled is False or str(enabled).lower() == "false":
+        status = "WATCHLIST"
+    elif "NO_TRADE" in quality.upper():
+        status = "NO TRADE"
+    elif "BELOW" in flags.upper():
+        status = "WATCHLIST"
+    else:
+        status = "EXECUTION"
+    return status
+
+
+def card_container(title: str, subtitle: str = "", border: bool = True):
+    cont = st.container(border=border)
+    with cont:
+        st.markdown(f"### {title}")
+        if subtitle:
+            st.caption(subtitle)
+    return cont
+
+
+def render_plan_metrics(row: pd.Series):
+    c1, c2, c3, c4, c5 = st.columns(5)
+    c1.metric("Close", fmt_num(row.get("latest_close"), 0))
+    c2.metric("Entry trigger", fmt_num(row.get("entry_trigger"), 0))
+    c3.metric("Stop loss", fmt_num(row.get("stop_loss"), 0))
+    c4.metric("Risk", fmt_num(row.get("risk_pct"), 2, "%") if safe_num(row.get("risk_pct")) and safe_num(row.get("risk_pct")) > 1 else fmt_num((safe_num(row.get("risk_pct")) or 0) * 100, 2, "%"))
+    c5.metric("Recommended RR", fmt_num(row.get("recommended_rr"), 2))
+
+
+def render_price_ladder(row: pd.Series):
+    values = [
+        ("Stop", row.get("stop_loss")),
+        ("Zone Low", row.get("entry_zone_low")),
+        ("Close", row.get("latest_close")),
+        ("Trigger", row.get("entry_trigger")),
+        ("T1", row.get("target_1")),
+        ("T2", row.get("target_2")),
+        ("T3", row.get("target_3")),
+    ]
+    data = []
+    for label, val in values:
+        v = safe_num(val)
+        if v is not None:
+            data.append({"Level": label, "Price": v})
+    if not data:
+        return
+    st.markdown("#### Price ladder")
+    st.dataframe(pd.DataFrame(data), hide_index=True, width="stretch")
+
+
+def render_text_block(title: str, text: str):
+    if text and str(text).strip() and str(text).strip().lower() != "nan":
+        with st.container(border=True):
+            st.markdown(f"**{title}**")
+            st.write(str(text))
+
+
+def render_trade_plan_detail(row: pd.Series):
+    status = status_badge_text(row)
+    ticker = row.get("ticker", "—")
+    strategy = row.get("strategy", "—")
+    score = fmt_num(row.get("score"), 3)
+    quality = row.get("plan_quality", "—")
+    risk_profile = row.get("risk_profile", row.get("risk_grade", "—"))
+
+    st.subheader(f"{ticker} · Numeric Trade Plan")
+    st.caption(f"{strategy} · {risk_profile} · score {score} · status {status} · quality {quality}")
+
+    render_plan_metrics(row)
+
+    c_left, c_right = st.columns([1.0, 1.0])
+    with c_left:
+        render_price_ladder(row)
+    with c_right:
+        st.markdown("#### Execution context")
+        ctx = pd.DataFrame([
+            {"Field": "Rank-1 buyer", "Value": row.get("rank1_buyer", "—")},
+            {"Field": "Risk flags", "Value": row.get("risk_flags", "OK")},
+            {"Field": "Hold days", "Value": row.get("hold_days", "—")},
+            {"Field": "Volume ratio 20D", "Value": fmt_num(row.get("volume_ratio_20d"), 2)},
+            {"Field": "Ret 5D", "Value": fmt_num((safe_num(row.get("ret_5d")) or 0) * 100, 2, "%")},
+            {"Field": "Ret 20D", "Value": fmt_num((safe_num(row.get("ret_20d")) or 0) * 100, 2, "%")},
+        ])
+        st.dataframe(ctx, hide_index=True, width="stretch")
+
+    st.markdown("#### Trade logic")
+    a, b = st.columns(2)
+    with a:
+        render_text_block("Why entry", row.get("why_entry", ""))
+        render_text_block("Why stop / invalidation", row.get("why_stop", ""))
+    with b:
+        render_text_block("Why targets", row.get("why_targets", ""))
+        render_text_block("No-trade reasons", row.get("no_trade_reasons", ""))
+
+    render_text_block("Portfolio / risk note", row.get("risk_note", ""))
+
+
+def render_compact_plan_table(df: pd.DataFrame, title: str = "Plans"):
+    cols = [
+        "ticker", "strategy", "plan_quality", "risk_profile", "score", "latest_close",
+        "entry_trigger", "stop_loss", "risk_pct", "target_1", "target_2", "recommended_rr",
+        "rank1_buyer", "risk_flags"
+    ]
+    st.markdown(f"#### {title}")
+    st.dataframe(table_cols(df, cols), hide_index=True, width="stretch")
+
+
+def filter_numeric_plan(df: pd.DataFrame, key_prefix: str) -> pd.DataFrame:
+    if df.empty:
+        return df
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        search = st.text_input("Search ticker", "", key=f"{key_prefix}_search")
+    with c2:
+        strategies = ["All"] + sorted([x for x in df.get("strategy", pd.Series(dtype=str)).dropna().astype(str).unique()])
+        strategy = st.selectbox("Strategy", strategies, key=f"{key_prefix}_strategy")
+    with c3:
+        qualities = ["All"] + sorted([x for x in df.get("plan_quality", pd.Series(dtype=str)).dropna().astype(str).unique()])
+        quality = st.selectbox("Plan quality", qualities, key=f"{key_prefix}_quality")
+    with c4:
+        risks = ["All"] + sorted([x for x in df.get("risk_profile", pd.Series(dtype=str)).dropna().astype(str).unique()])
+        risk = st.selectbox("Risk profile", risks, key=f"{key_prefix}_risk")
+
+    out = df.copy()
+    if search.strip() and "ticker" in out.columns:
+        out = out[out["ticker"].astype(str).str.contains(search.strip(), case=False, na=False)]
+    if strategy != "All" and "strategy" in out.columns:
+        out = out[out["strategy"].astype(str) == strategy]
+    if quality != "All" and "plan_quality" in out.columns:
+        out = out[out["plan_quality"].astype(str) == quality]
+    if risk != "All" and "risk_profile" in out.columns:
+        out = out[out["risk_profile"].astype(str) == risk]
+    if "score" in out.columns:
+        out = out.sort_values("score", ascending=False)
+    return out
+
+
+def render_route_links(signal_name: str, profiles: List[SignalProfile]):
+    st.caption("Direct routes")
+    cols = st.columns(min(4, max(1, len(profiles))))
+    for i, prof in enumerate(profiles[:4]):
+        url = f"?signal={quote(prof.signal_name)}&profile={quote(prof.profile)}"
+        cols[i].markdown(f"[Open `{prof.profile}`]({url})")
+
+
+def render_trade_plan_tab(sig_path: Path):
+    num = load_df(sig_path, "numeric_plan")
+    if num.empty:
+        st.info("numeric_trade_plan.csv tidak ditemukan pada profile ini.")
+        return
+
+    st.header("🎯 Numeric Trade Plan Desk")
+    st.caption("Execution levels first. Thesis and raw rows are supporting evidence.")
+
+    filtered = filter_numeric_plan(num, "trade_plan")
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Filtered plans", len(filtered))
+    if "execution_enabled" in filtered.columns:
+        m2.metric("Execution enabled", int(filtered["execution_enabled"].astype(str).str.lower().isin(["true", "1"]).sum()))
+    else:
+        m2.metric("Execution enabled", "—")
+    m3.metric("Avg risk", fmt_num((filtered["risk_pct"].apply(safe_num).dropna().mean() if "risk_pct" in filtered.columns and not filtered.empty else None) * 100 if "risk_pct" in filtered.columns and not filtered.empty else None, 2, "%"))
+    m4.metric("Median RR", fmt_num(filtered["recommended_rr"].apply(safe_num).dropna().median() if "recommended_rr" in filtered.columns and not filtered.empty else None, 2))
+
+    if filtered.empty:
+        st.warning("Tidak ada trade plan setelah filter.")
+        return
+
+    left, right = st.columns([1.05, 1.55])
+    with left:
+        render_compact_plan_table(filtered, "Ranked plans")
+        choices = [
+            f"{r.get('ticker', '—')} · {r.get('strategy', '—')} · {r.get('plan_quality', '—')}"
+            for _, r in filtered.iterrows()
+        ]
+        idx = st.selectbox("Select plan", range(len(choices)), format_func=lambda i: choices[i], key="trade_plan_select")
+    with right:
+        row = filtered.iloc[int(idx)]
+        render_trade_plan_detail(row)
+
+    with st.expander("Full numeric trading report"):
+        md = load_text(sig_path, "numeric_report")
+        st.markdown(md if md else "numeric_trading_report.md tidak ditemukan.")
+
+
+def render_brief_tab(sig_path: Path, profile: str):
+    st.header("📌 Daily Brief")
+    diagnostics = load_json(sig_path, "diagnostics")
+    profile_meta = load_json(sig_path, "profile_meta")
+    num = load_df(sig_path, "numeric_plan")
+    execution = load_df(sig_path, "execution")
+    watch = load_df(sig_path, "watchlist")
+    all_scores = load_df(sig_path, "all_scores")
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Profile", profile)
+    c2.metric("Universe", len(all_scores) if not all_scores.empty else "—")
+    c3.metric("Execution shortlist", len(execution))
+    c4.metric("Trade plans", len(num))
+
+    c5, c6, c7 = st.columns(3)
+    c5.metric("Watchlist rows", len(watch))
+    if not num.empty and "strategy" in num.columns:
+        c6.metric("Dominant strategy", str(num["strategy"].mode().iloc[0]) if not num["strategy"].mode().empty else "—")
+    else:
+        c6.metric("Dominant strategy", "—")
+    if not num.empty and "risk_flags" in num.columns:
+        flags = num["risk_flags"].fillna("OK").astype(str)
+        non_ok = flags[flags != "OK"]
+        c7.metric("Main risk", str(non_ok.mode().iloc[0]) if not non_ok.mode().empty else "OK")
+    else:
+        c7.metric("Main risk", "—")
+
+    if profile_meta:
+        with st.expander("Profile output metadata"):
+            st.json(profile_meta)
+    if diagnostics:
+        with st.expander("Diagnostics"):
+            st.json(diagnostics)
+
+
+def render_execution_tab(sig_path: Path):
+    st.header("✅ Execution Board")
+    execution = load_df(sig_path, "execution")
+    num = load_df(sig_path, "numeric_plan")
+    if execution.empty and num.empty:
+        st.info("Tidak ada execution_shortlist.csv atau numeric_trade_plan.csv.")
+        return
+
+    if not num.empty:
+        exec_tickers = set(execution.get("ticker", pd.Series(dtype=str)).astype(str)) if not execution.empty else set()
+        if exec_tickers and "ticker" in num.columns:
+            display = num[num["ticker"].astype(str).isin(exec_tickers)].copy()
+        else:
+            display = num.copy()
+        if "score" in display.columns:
+            display = display.sort_values("score", ascending=False)
+        st.caption("Execution candidates enriched with numeric trade plan.")
+        render_compact_plan_table(display.head(20), "Execution trade plans")
+        if not display.empty:
+            selected = st.selectbox(
+                "Inspect execution plan",
+                list(range(len(display))),
+                format_func=lambda i: f"{display.iloc[i].get('ticker','—')} · {display.iloc[i].get('strategy','—')}",
+                key="execution_plan_select",
+            )
+            render_trade_plan_detail(display.iloc[int(selected)])
+    else:
+        st.dataframe(execution, hide_index=True, width="stretch")
+
+
+def render_playbooks_tab(sig_path: Path):
+    st.header("📘 Playbooks")
+    num = load_df(sig_path, "numeric_plan")
+    narrative = load_df(sig_path, "narrative_cards")
+
+    if not num.empty:
+        filtered = filter_numeric_plan(num, "playbooks")
+        if filtered.empty:
+            st.warning("Tidak ada playbook setelah filter.")
+            return
+        choices = [
+            f"{r.get('ticker', '—')} · {r.get('strategy', '—')} · {r.get('plan_quality', '—')}"
+            for _, r in filtered.iterrows()
+        ]
+        idx = st.selectbox("Select ticker playbook", range(len(choices)), format_func=lambda i: choices[i], key="playbook_select")
+        render_trade_plan_detail(filtered.iloc[int(idx)])
+    elif not narrative.empty:
+        st.caption("Fallback: narrative_signal_cards.csv")
+        st.dataframe(narrative, hide_index=True, width="stretch")
+    else:
+        st.info("Tidak ada numeric_trade_plan atau narrative_signal_cards pada profile ini.")
+
+    with st.expander("Full narrative trading report"):
+        md = load_text(sig_path, "narrative_report")
+        st.markdown(md if md else "narrative_trading_report.md tidak ditemukan.")
+
+
+def strategy_files(sig_path: Path) -> List[Path]:
+    files = []
+    for p in sorted(sig_path.glob("*.csv")):
+        if p.name in IGNORE_STRATEGY_FILES:
+            continue
+        if p.name.startswith("numeric_") or p.name.startswith("narrative_"):
+            continue
+        files.append(p)
+    return files
+
+
+def render_watchlists_tab(sig_path: Path):
+    st.header("🧭 Watchlists")
+    watch = load_df(sig_path, "watchlist")
+    candidates = load_df(sig_path, "candidates")
+    files = strategy_files(sig_path)
+
+    rows = []
+    for p in files:
+        df = read_csv_cached(str(p))
+        rows.append({"file": p.name, "rows": len(df)})
+    if rows:
+        st.markdown("#### Strategy participation")
+        st.dataframe(pd.DataFrame(rows).sort_values("rows", ascending=False), hide_index=True, width="stretch")
+
+    if not watch.empty:
+        st.markdown("#### All strategy watchlist")
+        st.dataframe(watch, hide_index=True, width="stretch")
+    if not candidates.empty:
+        with st.expander("Execution-threshold candidates"):
+            st.dataframe(candidates, hide_index=True, width="stretch")
+
+
+def render_risk_tab(sig_path: Path):
+    st.header("⚠️ Risk Review")
+    num = load_df(sig_path, "numeric_plan")
+    if num.empty:
+        st.info("numeric_trade_plan.csv tidak ditemukan.")
+        return
+
+    c1, c2 = st.columns(2)
+    with c1:
+        if "risk_flags" in num.columns:
+            st.markdown("#### Risk flags")
+            st.dataframe(num["risk_flags"].fillna("OK").value_counts().reset_index().rename(columns={"index": "risk_flags", "risk_flags": "count"}), hide_index=True, width="stretch")
+    with c2:
+        if "rank1_buyer" in num.columns:
+            st.markdown("#### Broker concentration")
+            st.dataframe(num["rank1_buyer"].fillna("UNKNOWN").value_counts().head(15).reset_index().rename(columns={"index": "rank1_buyer", "rank1_buyer": "count"}), hide_index=True, width="stretch")
+
+    cols = ["ticker", "strategy", "plan_quality", "risk_profile", "risk_pct", "recommended_rr", "risk_flags", "rank1_buyer", "no_trade_reasons"]
+    st.markdown("#### Risk notes")
+    st.dataframe(table_cols(num, cols), hide_index=True, width="stretch")
+
+
+def render_analytics_tab(sig_path: Path):
+    st.header("📊 Analytics")
+    num = load_df(sig_path, "numeric_plan")
+    scores = load_df(sig_path, "all_scores")
+    if not num.empty:
+        c1, c2 = st.columns(2)
+        with c1:
+            if "strategy" in num.columns:
+                st.markdown("#### Plans by strategy")
+                st.bar_chart(num["strategy"].value_counts())
+        with c2:
+            if "plan_quality" in num.columns:
+                st.markdown("#### Plan quality")
+                st.bar_chart(num["plan_quality"].value_counts())
+        cols = [c for c in ["score", "risk_pct", "recommended_rr", "entry_distance_pct", "volume_ratio_20d"] if c in num.columns]
+        if cols:
+            st.markdown("#### Numeric summary")
+            st.dataframe(num[cols].describe(), width="stretch")
+    if not scores.empty:
+        score_cols = [c for c in scores.columns if c.startswith("score_")]
+        if score_cols:
+            col = st.selectbox("Score distribution", score_cols, key="analytics_score_col")
+            st.line_chart(scores[col].sort_values(ascending=False).reset_index(drop=True))
+
+
+def render_compare_tab(profile_map: Dict[str, SignalProfile]):
+    st.header("⚖️ Profile Compare")
+    if len(profile_map) < 2:
+        st.info("Tanggal ini hanya punya satu profile.")
+        return
+    names = sorted(profile_map, key=profile_sort_key)
+    left_name = st.selectbox("Left profile", names, index=0, key="compare_left")
+    right_name = st.selectbox("Right profile", names, index=min(1, len(names)-1), key="compare_right")
+
+    cols = st.columns(2)
+    for col, name in zip(cols, [left_name, right_name]):
+        sp = profile_map[name]
+        with col:
+            st.subheader(name)
+            num = load_df(sp.path, "numeric_plan")
+            execution = load_df(sp.path, "execution")
+            watch = load_df(sp.path, "watchlist")
+            scores = load_df(sp.path, "all_scores")
+            a, b, c, d = st.columns(4)
+            a.metric("Universe", len(scores) if not scores.empty else "—")
+            b.metric("Execution", len(execution))
+            c.metric("Plans", len(num))
+            d.metric("Watchlist", len(watch))
+            if not num.empty:
+                render_compact_plan_table(num.sort_values("score", ascending=False).head(15) if "score" in num.columns else num.head(15), "Top plans")
+
+
+def render_health_tab(sig_path: Path):
+    st.header("🩺 Data Health")
+    rows = []
+    for key, fname in SIGNAL_FILES.items():
+        p = sig_path / fname
+        if p.exists():
+            rows.append({"artifact": fname, "exists": True, "size_kb": round(p.stat().st_size / 1024, 2)})
+        else:
+            rows.append({"artifact": fname, "exists": False, "size_kb": None})
+    st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
+
+
+def render_raw_tab(sig_path: Path):
+    st.header("🗄️ Raw Data")
+    csvs = sorted(sig_path.glob("*.csv"))
+    if csvs:
+        p = st.selectbox("CSV file", csvs, format_func=lambda x: x.name, key="raw_csv_select")
+        df = read_csv_cached(str(p))
+        st.dataframe(df, hide_index=True, width="stretch")
+    for key in ["numeric_report", "narrative_report", "report"]:
+        with st.expander(SIGNAL_FILES[key]):
+            text = load_text(sig_path, key)
+            st.markdown(text if text else "File not found.")
+    for key in ["diagnostics", "profile_meta", "numeric_meta"]:
+        with st.expander(SIGNAL_FILES[key]):
+            st.json(load_json(sig_path, key))
+
+
+def apply_theme(theme: str):
+    # Keep CSS minimal. Native Streamlit widgets carry most of the UI.
+    if theme == "Dark":
+        st.markdown("""
+        <style>
+        .stApp { background: #0b1020; color: #e5e7eb; }
+        section[data-testid="stSidebar"] { background: #111827; }
+        div[data-testid="stMetric"] { background: rgba(148,163,184,.08); border: 1px solid rgba(148,163,184,.22); padding: 12px; border-radius: 14px; }
+        </style>
+        """, unsafe_allow_html=True)
+    else:
+        st.markdown("""
+        <style>
+        .stApp { background: #f8fafc; color: #0f172a; }
+        section[data-testid="stSidebar"] { background: #ffffff; }
+        div[data-testid="stMetric"] { background: #ffffff; border: 1px solid #e5e7eb; padding: 12px; border-radius: 14px; }
+        </style>
+        """, unsafe_allow_html=True)
+
+
+def main():
+    args = parse_args()
+    root = Path(args.root).resolve()
+
+    st.set_page_config(
+        page_title="Alpha Research Dashboard",
+        page_icon="📈",
+        layout="wide",
+        initial_sidebar_state="expanded",
+    )
+
+    with st.sidebar:
+        st.title("Alpha Research")
+        st.caption("Trade Intelligence Dashboard")
+        theme = st.radio("Theme", ["Light", "Dark"], index=0, horizontal=True)
+        st.caption("Root")
+        st.code(str(root), language=None)
+
+    apply_theme(theme)
+
+    profiles_by_signal = discover_signal_profiles(root)
+    if not profiles_by_signal:
+        st.error(f"No signal profiles found under {root / 'signals/daily'}")
+        return
+
+    query = st.query_params
+    signal_names = list(profiles_by_signal.keys())
+    query_signal = query.get("signal", signal_names[0])
+    if isinstance(query_signal, list):
+        query_signal = query_signal[0]
+    if query_signal not in signal_names:
+        query_signal = signal_names[0]
+
+    with st.sidebar:
+        selected_signal = st.selectbox(
+            "Signal date",
+            signal_names,
+            index=signal_names.index(query_signal),
+            format_func=normalize_signal_label,
+        )
+
+    profile_map = {p.profile: p for p in profiles_by_signal[selected_signal]}
+    profile_names = sorted(profile_map, key=profile_sort_key)
+    query_profile = query.get("profile", profile_names[0])
+    if isinstance(query_profile, list):
+        query_profile = query_profile[0]
+    if query_profile not in profile_names:
+        query_profile = profile_names[0]
+
+    with st.sidebar:
+        selected_profile = st.selectbox(
+            "Model profile",
+            profile_names,
+            index=profile_names.index(query_profile),
+        )
+        if st.button("Update route", width="stretch"):
+            st.query_params["signal"] = selected_signal
+            st.query_params["profile"] = selected_profile
+            st.rerun()
+
+        st.markdown("---")
+        render_route_links(selected_signal, profiles_by_signal[selected_signal])
+
+    selected = profile_map[selected_profile]
+    sig_path = selected.path
+
+    st.caption(f"`{selected_signal}` / `{selected_profile}`")
+    st.title("📈 Alpha Research Trade Intelligence")
+    st.caption("Profile-aware daily signal dashboard. Base and continual models are treated as separate routes.")
+
+    tabs = st.tabs([
+        "🎯 Trade Plan",
+        "📌 Brief",
+        "✅ Execute",
+        "📘 Playbooks",
+        "🧭 Watchlists",
+        "⚖️ Compare",
+        "⚠️ Risk",
+        "📊 Analytics",
+        "🩺 Data Health",
+        "🗄️ Raw Data",
+    ])
+
+    with tabs[0]:
+        render_trade_plan_tab(sig_path)
+    with tabs[1]:
+        render_brief_tab(sig_path, selected_profile)
+    with tabs[2]:
+        render_execution_tab(sig_path)
+    with tabs[3]:
+        render_playbooks_tab(sig_path)
+    with tabs[4]:
+        render_watchlists_tab(sig_path)
+    with tabs[5]:
+        render_compare_tab(profile_map)
+    with tabs[6]:
+        render_risk_tab(sig_path)
+    with tabs[7]:
+        render_analytics_tab(sig_path)
+    with tabs[8]:
+        render_health_tab(sig_path)
+    with tabs[9]:
+        render_raw_tab(sig_path)
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,583 @@
+from __future__ import annotations
+
+import json
+import math
+import re
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Dict, Iterable, List, Optional, Tuple
+
+import polars as pl
+
+
+def _to_date_str(x: Any) -> str:
+    s = str(x)
+    if " " in s:
+        s = s.split(" ")[0]
+    return s
+
+
+def _format_target_date(target_date: str) -> str:
+    # 2026-05-20 -> signal_20_may_2026
+    months = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"]
+    y, m, d = target_date.split("-")
+    return f"signal_{int(d)}_{months[int(m)-1]}_{y}"
+
+
+def _read_csv_if_exists(path: Path) -> pl.DataFrame:
+    if path.exists():
+        return pl.read_csv(path, try_parse_dates=True, infer_schema_length=10000)
+    return pl.DataFrame()
+
+
+def _load_json(path: Path, default: Any) -> Any:
+    if path.exists():
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return default
+
+
+def _num(v: Any, default: Optional[float] = None) -> Optional[float]:
+    try:
+        if v is None:
+            return default
+        if isinstance(v, str) and v.strip() == "":
+            return default
+        x = float(v)
+        if math.isnan(x) or math.isinf(x):
+            return default
+        return x
+    except Exception:
+        return default
+
+
+def idx_tick(price: float) -> int:
+    """Approximate IDX tick ladder. Keep editable through config if exchange rules change."""
+    if price < 200:
+        return 1
+    if price < 500:
+        return 2
+    if price < 2000:
+        return 5
+    if price < 5000:
+        return 10
+    return 25
+
+
+def round_to_tick(price: float, side: str = "nearest") -> float:
+    if price is None or not math.isfinite(price) or price <= 0:
+        return float("nan")
+    t = idx_tick(price)
+    if side == "up":
+        return float(math.ceil(price / t) * t)
+    if side == "down":
+        return float(math.floor(price / t) * t)
+    return float(round(price / t) * t)
+
+
+def _infer_signal_date(signal_dir: Path, scores: pl.DataFrame) -> str:
+    # Prefer diagnostics json, then max date in all_scores.
+    diag = _load_json(signal_dir / "diagnostics.json", {})
+    for k in ["signal_date", "end_date", "score_date", "as_of_date"]:
+        if k in diag:
+            return _to_date_str(diag[k])
+    if "date" in scores.columns and scores.height:
+        return _to_date_str(scores.select(pl.col("date").max()).item())
+    return "unknown"
+
+
+def _get_col(row: Dict[str, Any], names: Iterable[str], default: Any = None) -> Any:
+    for n in names:
+        if n in row and row[n] not in (None, ""):
+            return row[n]
+    return default
+
+
+def _infer_strategy_name(row: Dict[str, Any]) -> str:
+    for c in ["strategy_name", "strategy", "strategy_tag", "source_strategy", "policy_name"]:
+        v = row.get(c)
+        if v not in (None, ""):
+            return str(v)
+    score_col = str(row.get("score_col", ""))
+    if "ara" in score_col:
+        return "ara_candidate"
+    if "mm" in score_col or "silent" in score_col:
+        return "market_maker_silent_accum"
+    if "momentum_5d" in score_col:
+        return "momentum_5d"
+    if "momentum_10d" in score_col:
+        return "momentum_10d"
+    if "scalp" in score_col:
+        return "scalping"
+    if "swing" in score_col:
+        return "swing"
+    if "position" in score_col:
+        return "position"
+    return "unknown_strategy"
+
+
+def _score_value(row: Dict[str, Any]) -> Optional[float]:
+    for c in ["score", "final_score", "model_score", "selected_score"]:
+        if c in row:
+            return _num(row[c])
+    score_col = row.get("score_col")
+    if score_col and score_col in row:
+        return _num(row[score_col])
+    # fallback: maximum score_* column available in row
+    vals = [_num(v) for k, v in row.items() if str(k).startswith("score_")]
+    vals = [v for v in vals if v is not None]
+    return max(vals) if vals else None
+
+
+def _policy_strategies(policy: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    out: Dict[str, Dict[str, Any]] = {}
+    for group in ["core_execution", "aggressive_challenger", "watchlist_only", "strategies"]:
+        items = policy.get(group, [])
+        if isinstance(items, dict):
+            items = list(items.values())
+        for s in items:
+            if isinstance(s, dict):
+                name = s.get("name") or s.get("strategy_name") or s.get("id")
+                if name:
+                    out[str(name)] = s
+    # champion_strategies can be dict-of-dict
+    champs = policy.get("champion_strategies", {})
+    if isinstance(champs, dict):
+        for _, s in champs.items():
+            if isinstance(s, dict):
+                name = s.get("name") or s.get("strategy_name")
+                if name:
+                    out[str(name)] = s
+    return out
+
+
+def _load_ohlcv(root: Path, end_date: str, lookback_days: int = 220) -> pl.DataFrame:
+    paths = [
+        root / "data" / "raw_canonical" / "ohlcv.parquet",
+        root / "data" / "raw" / "ohlcv" / "ohlcv_canonical.parquet",
+    ]
+    p = next((x for x in paths if x.exists()), None)
+    if p is None:
+        raise FileNotFoundError("Could not find canonical OHLCV parquet in data/raw_canonical/ohlcv.parquet")
+    df = pl.read_parquet(p)
+    if "date" not in df.columns or "ticker" not in df.columns:
+        raise ValueError("OHLCV must contain date and ticker")
+    df = df.with_columns([
+        pl.col("date").cast(pl.Date),
+        pl.col("ticker").cast(pl.Utf8).str.to_uppercase(),
+    ]).sort(["ticker", "date"])
+    # Polars date filtering from string literal is OK when cast.
+    return df.filter(pl.col("date") <= pl.lit(end_date).str.to_date())
+
+
+def _latest_technical_snapshot(ohlcv: pl.DataFrame, tickers: List[str]) -> pl.DataFrame:
+    if not tickers:
+        return pl.DataFrame()
+    df = ohlcv.filter(pl.col("ticker").is_in(tickers)).sort(["ticker", "date"])
+    if df.is_empty():
+        return pl.DataFrame()
+    df = df.with_columns([
+        pl.col("close").shift(1).over("ticker").alias("prev_close"),
+    ])
+    df = df.with_columns([
+        pl.max_horizontal([
+            (pl.col("high") - pl.col("low")).abs(),
+            (pl.col("high") - pl.col("prev_close")).abs(),
+            (pl.col("low") - pl.col("prev_close")).abs(),
+        ]).alias("true_range")
+    ])
+    df = df.with_columns([
+        pl.col("true_range").rolling_mean(14, min_samples=5).over("ticker").alias("atr14"),
+        pl.col("low").rolling_min(5, min_samples=2).over("ticker").alias("support_5d"),
+        pl.col("low").rolling_min(10, min_samples=3).over("ticker").alias("support_10d"),
+        pl.col("low").rolling_min(20, min_samples=5).over("ticker").alias("support_20d"),
+        pl.col("high").rolling_max(5, min_samples=2).over("ticker").alias("resistance_5d"),
+        pl.col("high").rolling_max(10, min_samples=3).over("ticker").alias("resistance_10d"),
+        pl.col("high").rolling_max(20, min_samples=5).over("ticker").alias("resistance_20d"),
+        pl.col("high").rolling_max(60, min_samples=10).over("ticker").alias("resistance_60d"),
+        pl.col("volume").rolling_mean(20, min_samples=5).over("ticker").alias("volume_ma20"),
+        (pl.col("close") / pl.col("close").shift(5).over("ticker") - 1).alias("ret_5d_px"),
+        (pl.col("close") / pl.col("close").shift(20).over("ticker") - 1).alias("ret_20d_px"),
+    ])
+    df = df.with_columns([
+        (pl.col("volume") / pl.when(pl.col("volume_ma20") > 0).then(pl.col("volume_ma20")).otherwise(None)).alias("volume_ratio_20d_px"),
+        (pl.col("atr14") / pl.col("close")).alias("atr_pct"),
+        ((pl.col("close") - pl.col("support_20d")) / (pl.col("resistance_20d") - pl.col("support_20d"))).alias("close_position_20d"),
+    ])
+    latest = df.group_by("ticker").tail(1)
+    return latest
+
+
+def _merge_rows(signals: pl.DataFrame, scores: pl.DataFrame) -> pl.DataFrame:
+    if signals.is_empty():
+        return signals
+    if "ticker" not in signals.columns:
+        raise ValueError("Signal file must contain ticker column")
+    out = signals.with_columns(pl.col("ticker").cast(pl.Utf8).str.to_uppercase())
+    if not scores.is_empty() and "ticker" in scores.columns:
+        score_cols = [c for c in scores.columns if c not in out.columns or c in ["ticker", "date"]]
+        sc = scores.select(score_cols).with_columns(pl.col("ticker").cast(pl.Utf8).str.to_uppercase())
+        # Prefer one row per ticker: daily score panel is already one date.
+        sc = sc.unique(subset=["ticker"], keep="last")
+        out = out.join(sc, on="ticker", how="left")
+    return out
+
+
+def _safe_float_from(row: Dict[str, Any], *names: str, default: Optional[float] = None) -> Optional[float]:
+    for n in names:
+        if n in row:
+            v = _num(row.get(n))
+            if v is not None:
+                return v
+    return default
+
+
+def _calc_trade_plan(row: Dict[str, Any], policy_map: Dict[str, Dict[str, Any]], cfg: Dict[str, Any]) -> Dict[str, Any]:
+    ticker = str(row.get("ticker"))
+    strategy = _infer_strategy_name(row)
+    pol = policy_map.get(strategy, {})
+    score = _score_value(row)
+
+    close = _safe_float_from(row, "close")
+    high = _safe_float_from(row, "high") or close
+    low = _safe_float_from(row, "low") or close
+    atr = _safe_float_from(row, "atr14")
+    support_5 = _safe_float_from(row, "support_5d")
+    support_10 = _safe_float_from(row, "support_10d")
+    support_20 = _safe_float_from(row, "support_20d")
+    resistance_5 = _safe_float_from(row, "resistance_5d")
+    resistance_10 = _safe_float_from(row, "resistance_10d")
+    resistance_20 = _safe_float_from(row, "resistance_20d")
+    resistance_60 = _safe_float_from(row, "resistance_60d")
+    atr_pct = _safe_float_from(row, "atr_pct")
+    ret5 = _safe_float_from(row, "ret_5d_px", "ret_5d")
+    ret20 = _safe_float_from(row, "ret_20d_px", "ret_20d")
+    vol_ratio = _safe_float_from(row, "volume_ratio_20d_px", "volume_ratio_20d")
+    net_flow = _safe_float_from(row, "net_flow_ratio")
+    buyer_dom = _safe_float_from(row, "buyer_dominance_ratio")
+    brok_streak = _safe_float_from(row, "rank1_same_buyer_streak")
+
+    if close is None or close <= 0 or atr is None or atr <= 0:
+        return {
+            "ticker": ticker,
+            "strategy": strategy,
+            "score": score,
+            "trade_decision": "NO_TRADE",
+            "reason": "Insufficient close/ATR data to compute numeric risk plan.",
+        }
+
+    tick = idx_tick(close)
+    min_score = _num(pol.get("min_score"), default=cfg.get("default_min_score", 0.5))
+    hold_days = int(pol.get("hold_days", cfg.get("default_hold_days", 1)))
+    is_watchlist = bool(row.get("watchlist_only", False)) or (score is not None and min_score is not None and score < min_score)
+
+    # Strategy type decisions.
+    s_l = strategy.lower()
+    is_breakout_strategy = any(k in s_l for k in ["momentum", "scalp", "ara", "breakout"])
+    is_defensive = any(k in s_l for k in ["defensive", "swing", "position", "market_maker"])
+
+    high_ref = resistance_5 or high
+    near_high20 = False
+    if resistance_20 and resistance_20 > 0:
+        near_high20 = close >= resistance_20 - 0.75 * atr
+
+    if is_breakout_strategy or near_high20:
+        entry_trigger = round_to_tick(max(high_ref, close) + tick, "up")
+        entry_zone_low = round_to_tick(max(close - 0.25 * atr, (support_5 or close - atr)), "down")
+        entry_zone_high = entry_trigger
+        entry_type = "breakout_confirmation"
+    else:
+        entry_zone_low = round_to_tick(max((support_5 or close - 0.5 * atr), close - 0.6 * atr), "down")
+        entry_zone_high = round_to_tick(close + 0.10 * atr, "up")
+        entry_trigger = round_to_tick(entry_zone_high, "up")
+        entry_type = "pullback_or_retest_confirmation"
+
+    entry = entry_trigger
+
+    # Structural stop logic: use recent support, but cap by ATR to avoid absurd distant stops.
+    structural_supports = [x for x in [support_5, support_10, support_20, low] if x is not None and x > 0]
+    structural_support = max([x for x in structural_supports if x < entry], default=min(structural_supports) if structural_supports else close - atr)
+    raw_structure_stop = round_to_tick(structural_support - tick, "down")
+    atr_stop = round_to_tick(entry - cfg.get("atr_stop_mult", 1.25) * atr, "down")
+
+    max_risk_atr = cfg.get("max_risk_atr", 2.2)
+    if entry - raw_structure_stop > max_risk_atr * atr:
+        stop = atr_stop
+        stop_basis = "ATR-capped stop because nearest structural invalidation is too far relative to current volatility."
+    else:
+        stop = raw_structure_stop
+        stop_basis = "Structural stop below recent support/retest area."
+    if stop >= entry:
+        stop = round_to_tick(entry - max(tick, 1.0 * atr), "down")
+        stop_basis = "Fallback volatility stop because structure stop was not below entry."
+
+    risk = entry - stop
+    risk_pct = risk / entry if entry > 0 else float("nan")
+
+    # Dynamic RR target selection.
+    quality = 0.0
+    if score is not None:
+        quality += min(max(score, 0), 1) * 0.40
+    if ret20 is not None and ret20 > 0:
+        quality += min(ret20 / 0.20, 1) * 0.15
+    if vol_ratio is not None and vol_ratio >= 1.2:
+        quality += 0.15
+    if net_flow is not None and net_flow > 0:
+        quality += min(net_flow, 1) * 0.15
+    if buyer_dom is not None and buyer_dom >= 0.25:
+        quality += min(buyer_dom, 1) * 0.10
+    if brok_streak is not None and brok_streak >= 3:
+        quality += 0.05
+
+    if "ara" in s_l or "scalp" in s_l:
+        rr_plan = 1.3 if quality < 0.55 else 1.8
+    elif "momentum_10" in s_l or "position" in s_l:
+        rr_plan = 2.0 if quality < 0.65 else 3.0
+    elif "momentum" in s_l or "swing" in s_l:
+        rr_plan = 1.8 if quality < 0.60 else 2.5
+    else:
+        rr_plan = 1.5 if quality < 0.60 else 2.0
+
+    # Objective targets: resistance + RR. Do not set target below required RR.
+    t1_rr = 1.0
+    t1 = round_to_tick(max((resistance_10 or entry + risk), entry + t1_rr * risk), "up")
+    t2 = round_to_tick(max((resistance_20 or entry + rr_plan * risk), entry + rr_plan * risk), "up")
+    t3_basis = max((resistance_60 or entry + 3 * risk), entry + 3 * risk)
+    t3 = round_to_tick(t3_basis, "up")
+
+    rr1 = (t1 - entry) / risk if risk > 0 else None
+    rr2 = (t2 - entry) / risk if risk > 0 else None
+    rr3 = (t3 - entry) / risk if risk > 0 else None
+
+    # No-trade rules.
+    reasons = []
+    max_risk_pct = cfg.get("max_risk_pct", 0.08)
+    if risk_pct > max_risk_pct:
+        reasons.append(f"risk_pct {risk_pct:.2%} exceeds max_risk_pct {max_risk_pct:.2%}")
+    if score is not None and min_score is not None and score < min_score:
+        reasons.append(f"score {score:.3f} below execution threshold {float(min_score):.3f}")
+    if vol_ratio is not None and vol_ratio < cfg.get("min_volume_ratio_for_conviction", 0.6):
+        reasons.append(f"volume_ratio {vol_ratio:.2f} below conviction floor")
+
+    trade_decision = "WATCHLIST_ONLY" if is_watchlist else "EXECUTION_CANDIDATE"
+    if reasons and not is_watchlist:
+        trade_decision = "CONDITIONAL_ONLY"
+    if risk <= 0 or not math.isfinite(risk):
+        trade_decision = "NO_TRADE"
+        reasons.append("invalid risk distance")
+
+    why_entry = (
+        f"Entry trigger {entry:.0f} is derived from {'breakout above recent high' if entry_type=='breakout_confirmation' else 'retest/pullback confirmation'}; "
+        f"latest close {close:.0f}, ATR14 {atr:.1f}, support_10d {support_10:.0f if support_10 else float('nan')}, resistance_20d {resistance_20:.0f if resistance_20 else float('nan')}."
+    )
+    # f-string conditional formatting above cannot use inline spec safely; replace through helper.
+    sup10_s = f"{support_10:.0f}" if support_10 is not None else "n/a"
+    res20_s = f"{resistance_20:.0f}" if resistance_20 is not None else "n/a"
+    why_entry = (
+        f"Entry trigger {entry:.0f} is derived from {'breakout above recent high' if entry_type=='breakout_confirmation' else 'retest/pullback confirmation'}; "
+        f"latest close {close:.0f}, ATR14 {atr:.1f}, support_10d {sup10_s}, resistance_20d {res20_s}."
+    )
+
+    why_stop = (
+        f"Stop {stop:.0f} gives risk {risk:.0f} points ({risk_pct:.2%}). {stop_basis} "
+        f"Thesis is invalid if price loses this structure or if liquidity/momentum fails after entry."
+    )
+    why_targets = (
+        f"Target 1 {t1:.0f} (~{rr1:.2f}R) uses nearest resistance / 1R reference. "
+        f"Target 2 {t2:.0f} (~{rr2:.2f}R) uses required RR plan {rr_plan:.1f}R and resistance_20d. "
+        f"Target 3 {t3:.0f} (~{rr3:.2f}R) is continuation-only, using resistance_60d or 3R extension."
+    )
+    market_read = (
+        f"5d return={ret5:.2%} " if ret5 is not None else "5d return=n/a "
+    ) + (
+        f"20d return={ret20:.2%}, " if ret20 is not None else "20d return=n/a, "
+    ) + (
+        f"volume ratio={vol_ratio:.2f}, " if vol_ratio is not None else "volume ratio=n/a, "
+    ) + (
+        f"net flow ratio={net_flow:.3f}, " if net_flow is not None else "net flow ratio=n/a, "
+    ) + (
+        f"buyer dominance={buyer_dom:.3f}." if buyer_dom is not None else "buyer dominance=n/a."
+    )
+
+    return {
+        "ticker": ticker,
+        "strategy": strategy,
+        "score": score,
+        "min_score": min_score,
+        "trade_decision": trade_decision,
+        "entry_type": entry_type,
+        "entry_trigger": entry,
+        "entry_zone_low": entry_zone_low,
+        "entry_zone_high": entry_zone_high,
+        "stop_loss": stop,
+        "risk_points": risk,
+        "risk_pct": risk_pct,
+        "target_1": t1,
+        "target_2": t2,
+        "target_3": t3,
+        "rr_1": rr1,
+        "rr_2": rr2,
+        "rr_3": rr3,
+        "recommended_rr": rr_plan,
+        "hold_days_policy": hold_days,
+        "atr14": atr,
+        "atr_pct": atr_pct,
+        "latest_close": close,
+        "support_5d": support_5,
+        "support_10d": support_10,
+        "support_20d": support_20,
+        "resistance_5d": resistance_5,
+        "resistance_10d": resistance_10,
+        "resistance_20d": resistance_20,
+        "resistance_60d": resistance_60,
+        "ret_5d": ret5,
+        "ret_20d": ret20,
+        "volume_ratio_20d": vol_ratio,
+        "net_flow_ratio": net_flow,
+        "buyer_dominance_ratio": buyer_dom,
+        "rank1_same_buyer_streak": brok_streak,
+        "quality_score_internal": quality,
+        "no_trade_reasons": "; ".join(reasons),
+        "market_read": market_read,
+        "why_entry": why_entry,
+        "why_stop": why_stop,
+        "why_targets": why_targets,
+    }
+
+
+def _md_section(plan: Dict[str, Any]) -> str:
+    ticker = plan.get("ticker")
+    strategy = plan.get("strategy")
+    decision = plan.get("trade_decision")
+    score = plan.get("score")
+    score_s = f"{score:.3f}" if isinstance(score, (int, float)) and math.isfinite(score) else "n/a"
+    no_trade = plan.get("no_trade_reasons") or "None"
+
+    return f"""
+## {ticker} — {strategy}
+
+**Decision:** {decision}  
+**Model score:** {score_s} | **Policy min score:** {plan.get('min_score', 'n/a')}
+
+### Numeric execution plan
+
+| Item | Level |
+|---|---:|
+| Latest close | {plan.get('latest_close', float('nan')):.0f} |
+| Entry trigger | {plan.get('entry_trigger', float('nan')):.0f} |
+| Buy zone | {plan.get('entry_zone_low', float('nan')):.0f} – {plan.get('entry_zone_high', float('nan')):.0f} |
+| Stop loss / invalidation | {plan.get('stop_loss', float('nan')):.0f} |
+| Risk | {plan.get('risk_points', float('nan')):.0f} pts / {plan.get('risk_pct', float('nan')):.2%} |
+| Target 1 | {plan.get('target_1', float('nan')):.0f} ({plan.get('rr_1', float('nan')):.2f}R) |
+| Target 2 | {plan.get('target_2', float('nan')):.0f} ({plan.get('rr_2', float('nan')):.2f}R) |
+| Target 3 | {plan.get('target_3', float('nan')):.0f} ({plan.get('rr_3', float('nan')):.2f}R) |
+| Recommended RR | {plan.get('recommended_rr', float('nan')):.2f}R |
+| Policy hold days | {plan.get('hold_days_policy', 'n/a')} |
+
+### Why these numbers?
+
+- **Market/behaviour read:** {plan.get('market_read')}
+- **Entry logic:** {plan.get('why_entry')}
+- **Stop/invalidation logic:** {plan.get('why_stop')}
+- **Exit/target logic:** {plan.get('why_targets')}
+
+### No-trade / conditional filters
+
+{no_trade}
+""".strip()
+
+
+def build_numeric_trade_report(
+    root: str | Path,
+    signal_dir: str | Path | None = None,
+    target_date: Optional[str] = None,
+    policy_path: str | Path = "configs/numeric_report_policy.json",
+    source_file: str = "all_strategy_watchlist.csv",
+    max_rows: int = 80,
+) -> Dict[str, Any]:
+    root = Path(root)
+    if signal_dir is None:
+        if not target_date:
+            raise ValueError("Provide either signal_dir or target_date")
+        signal_dir = root / "signals" / "daily" / _format_target_date(target_date)
+    else:
+        signal_dir = Path(signal_dir)
+        if not signal_dir.is_absolute():
+            signal_dir = root / signal_dir
+    if not signal_dir.exists():
+        raise FileNotFoundError(signal_dir)
+
+    cfg = _load_json(root / policy_path if not Path(policy_path).is_absolute() else Path(policy_path), {})
+    if not cfg:
+        cfg = {
+            "atr_stop_mult": 1.25,
+            "max_risk_atr": 2.2,
+            "max_risk_pct": 0.08,
+            "default_min_score": 0.5,
+            "default_hold_days": 1,
+            "min_volume_ratio_for_conviction": 0.6,
+        }
+
+    policy = _load_json(root / "configs" / "signal_policy.json", {})
+    policy_map = _policy_strategies(policy)
+
+    scores = _read_csv_if_exists(signal_dir / "all_scores.csv")
+    signal_date = _infer_signal_date(signal_dir, scores)
+    sig = _read_csv_if_exists(signal_dir / source_file)
+    if sig.is_empty():
+        for alt in ["signals_main.csv", "execution_shortlist.csv", "all_strategy_candidates.csv"]:
+            sig = _read_csv_if_exists(signal_dir / alt)
+            if not sig.is_empty():
+                source_file = alt
+                break
+    if sig.is_empty():
+        raise ValueError(f"No signal rows found in {signal_dir}; tried {source_file} and common fallbacks")
+    if sig.height > max_rows:
+        sig = sig.head(max_rows)
+
+    sig = _merge_rows(sig, scores)
+    tickers = sig.select(pl.col("ticker").cast(pl.Utf8).str.to_uppercase()).to_series().to_list()
+    ohlcv = _load_ohlcv(root, signal_date)
+    tech = _latest_technical_snapshot(ohlcv, tickers)
+    if not tech.is_empty():
+        sig = sig.join(tech, on="ticker", how="left", suffix="_tech")
+        # If signal already has close/high/low, prefer technical latest from OHLCV via suffix when available.
+        for base in ["close", "high", "low", "open", "volume"]:
+            tech_col = f"{base}_tech"
+            if tech_col in sig.columns:
+                sig = sig.with_columns(pl.coalesce([pl.col(tech_col), pl.col(base)]).alias(base) if base in sig.columns else pl.col(tech_col).alias(base))
+
+    plans: List[Dict[str, Any]] = []
+    for row in sig.to_dicts():
+        plans.append(_calc_trade_plan(row, policy_map, cfg))
+
+    out_df = pl.DataFrame(plans)
+    out_csv = signal_dir / "numeric_trade_plan.csv"
+    out_json = signal_dir / "numeric_trade_plan.json"
+    out_md = signal_dir / "numeric_trading_report.md"
+    out_df.write_csv(out_csv)
+    with open(out_json, "w", encoding="utf-8") as f:
+        json.dump(plans, f, indent=2, default=str)
+
+    header = f"""# Numeric Trading Intelligence Report
+
+Signal directory: `{signal_dir}`  
+Signal date used for technical context: `{signal_date}`  
+Source file: `{source_file}`  
+Rows analysed: `{len(plans)}`
+
+This report is generated from model scores, signal policy, canonical OHLCV, ATR, support/resistance, liquidity, and broker-flow features. It is a decision-support report, not a guarantee of execution quality.
+""".strip()
+    sections = [header] + [_md_section(p) for p in plans]
+    with open(out_md, "w", encoding="utf-8") as f:
+        f.write("\n\n---\n\n".join(sections))
+
+    return {
+        "signal_dir": str(signal_dir),
+        "signal_date": signal_date,
+        "source_file": source_file,
+        "rows": len(plans),
+        "csv": str(out_csv),
+        "json": str(out_json),
+        "markdown": str(out_md),
+    }
