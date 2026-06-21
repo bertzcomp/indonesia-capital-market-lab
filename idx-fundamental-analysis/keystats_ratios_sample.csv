@@ -1,0 +1,277 @@
+ticker,category,metric_name,metric_id,value
+AADI,Current Valuation,Current PE Ratio (Annualised),12148,6.75
+AADI,Current Valuation,Current PE Ratio (TTM),2891,6.75
+AADI,Current Valuation,Forward PE Ratio,16577,5.92
+AADI,Current Valuation,IHSG PE Ratio TTM (Median),13427,9.14
+AADI,Current Valuation,Earnings Yield (TTM),2898,14.83%
+AADI,Current Valuation,Current Price to Sales (TTM),2893,1.04
+AADI,Current Valuation,Current Price to Book Value,2896,1.52
+AADI,Current Valuation,Current Price To Cashflow (TTM),16533,5.88
+AADI,Current Valuation,Current Price To Free Cashflow (TTM),15881,9.44
+AADI,Current Valuation,EV to EBIT (TTM),2897,5.13
+AADI,Current Valuation,EV to EBITDA (TTM),21457,4.59
+AADI,Current Valuation,PEG Ratio,13431,-0.19
+AADI,Current Valuation,PEG Ratio (3yr),13432,-0.24
+AADI,Current Valuation,PEG (Forward),13430,-
+AADI,Per Share,Current EPS (TTM),13200,"1,608.59"
+AADI,Per Share,Current EPS (Annualised),12988,"1,608.59"
+AADI,Per Share,Revenue Per Share (TTM),15880,"10,390.40"
+AADI,Per Share,Cash Per Share (Quarter),15879,"1,987.11"
+AADI,Per Share,Current Book Value Per Share,15718,"7,157.79"
+AADI,Per Share,Free Cashflow Per Share (TTM),15882,"1,149.53"
+AADI,Solvency,Current Ratio (Quarter),1498,1.95
+AADI,Solvency,Quick Ratio (Quarter),1500,1.85
+AADI,Solvency,Debt to Equity Ratio (Quarter),1508,0.25
+AADI,Solvency,LT Debt/Equity (Quarter),1504,0.23
+AADI,Solvency,Total Liabilities/Equity (Quarter),1573,0.62
+AADI,Solvency,Total Debt/Total Assets (Quarter),1512,0.14
+AADI,Solvency,Financial Leverage (Quarter),1502,1.71
+AADI,Solvency,Interest Coverage (TTM),1484,17.79
+AADI,Solvency,Free cash flow (Quarter),2536,"1,574 B"
+AADI,Solvency,Altman Z-Score (Modified),13402,4.38
+AADI,Management Effectiveness,Return on Assets (TTM),1460,13.13%
+AADI,Management Effectiveness,Return on Equity (TTM),1461,22.47%
+AADI,Management Effectiveness,Return on Capital Employed (TTM),1462,20.70%
+AADI,Management Effectiveness,Return On Invested Capital (TTM),13447,17.77%
+AADI,Management Effectiveness,Days Sales Outstanding (Quarter),1432,35.48
+AADI,Management Effectiveness,Days Inventory (Quarter),1435,9.04
+AADI,Management Effectiveness,Days Payables Outstanding (Quarter),1439,52.92
+AADI,Management Effectiveness,Cash Conversion Cycle (Quarter),1442,-8.40
+AADI,Management Effectiveness,Receivables Turnover (Quarter),1445,2.56
+AADI,Management Effectiveness,Asset Turnover (TTM),1467,0.82
+AADI,Management Effectiveness,Inventory Turnover (TTM),1465,36.97
+AADI,Profitability,Gross Profit Margin (Quarter),1561,24.47%
+AADI,Profitability,Operating Profit Margin (Quarter),1562,17.84%
+AADI,Profitability,Net Profit Margin (Quarter),1563,13.29%
+AADI,Growth,Revenue (Quarter YoY Growth),1554,8.13%
+AADI,Growth,Gross Profit (Quarter YoY Growth),3008,-2.94%
+AADI,Growth,Net Income (Quarter YoY Growth),18214,34.02%
+AADI,Dividend,Dividend,2913,538.08
+AADI,Dividend,Dividend (TTM),12722,538.08
+AADI,Dividend,Payout Ratio,2916,33.45%
+AADI,Dividend,Dividend Yield,2915,4.96%
+AADI,Dividend,Latest Dividend Ex-Date,20292,18 Nov 25
+AADI,Market Rank,Piotroski F-Score,13366,5.00
+AADI,Market Rank,EPS Rating,13382,
+AADI,Market Rank,Relative Strength Rating,13387,87.00%
+AADI,Market Rank,Rank (Market Cap),13423,97.00%
+AADI,Market Rank,Rank (Current PE Ratio TTM),13426,88.00%
+AADI,Market Rank,Rank (Earnings Yield),13424,-
+AADI,Market Rank,Rank (P/S),13420,60.00%
+AADI,Market Rank,Rank (P/B),13421,45.00%
+AADI,Market Rank,Rank (Near 52 Weeks High),13422,88.00%
+AADI,Income Statement,Revenue (TTM),2997,"80,909 B"
+AADI,Income Statement,Gross Profit (TTM),3007,"20,790 B"
+AADI,Income Statement,EBITDA (TTM),21456,"19,214 B"
+AADI,Income Statement,Net Income (TTM),1555,"12,526 B"
+AADI,Balance Sheet,Cash (Quarter),1557,"15,473 B"
+AADI,Balance Sheet,Total Assets (Quarter),1559,"95,409 B"
+AADI,Balance Sheet,Total Liabilities (Quarter),1560,"34,387 B"
+AADI,Balance Sheet,Working Capital (Quarter),1518,"14,607 B"
+AADI,Balance Sheet,Common Equity,15883,"55,737 B"
+AADI,Balance Sheet,Long-term Debt (Quarter),1524,"13,073 B"
+AADI,Balance Sheet,Short-term Debt (Quarter),1520,740 B
+AADI,Balance Sheet,Total Debt (Quarter),1486,"13,813 B"
+AADI,Balance Sheet,Net Debt (Quarter),1488,"(1,660 B)"
+AADI,Balance Sheet,Total Equity,21544,"61,022 B"
+AADI,Cash Flow Statement,Cash From Operations (TTM),2545,"14,367 B"
+AADI,Cash Flow Statement,Cash From Investing (TTM),2544,"(6,371 B)"
+AADI,Cash Flow Statement,Cash From Financing (TTM),2543,"(17,740 B)"
+AADI,Cash Flow Statement,Capital expenditure (TTM),2534,"(5,415 B)"
+AADI,Cash Flow Statement,Free cash flow (TTM),2538,"8,951 B"
+AADI,Price Performance,1 Week Price Returns,14812,-1.14%
+AADI,Price Performance,3 Month Price Returns,1565,53.90%
+AADI,Price Performance,1 Month Price Returns,1564,9.60%
+AADI,Price Performance,6 Month Price Returns,1566,42.76%
+AADI,Price Performance,1 Year Price Returns,1567,66.28%
+AADI,Price Performance,3 Year Price Returns,1568,-
+AADI,Price Performance,5 Year Price Returns,18172,-
+AADI,Price Performance,10 Year Price Returns,18173,-
+AADI,Price Performance,Year to Date Price Returns,1569,55.56%
+AADI,Price Performance,52 Week High,1570,"11,800.00"
+AADI,Price Performance,52 Week Low,1571,"5,575.00"
+AALI,Current Valuation,Current PE Ratio (Annualised),12148,10.17
+AALI,Current Valuation,Current PE Ratio (TTM),2891,10.17
+AALI,Current Valuation,Forward PE Ratio,16577,9.30
+AALI,Current Valuation,IHSG PE Ratio TTM (Median),13427,9.14
+AALI,Current Valuation,Earnings Yield (TTM),2898,9.83%
+AALI,Current Valuation,Current Price to Sales (TTM),2893,0.52
+AALI,Current Valuation,Current Price to Book Value,2896,0.64
+AALI,Current Valuation,Current Price To Cashflow (TTM),16533,3.55
+AALI,Current Valuation,Current Price To Free Cashflow (TTM),15881,4.36
+AALI,Current Valuation,EV to EBIT (TTM),2897,5.30
+AALI,Current Valuation,EV to EBITDA (TTM),21457,3.37
+AALI,Current Valuation,PEG Ratio,13431,0.36
+AALI,Current Valuation,PEG Ratio (3yr),13432,-1.96
+AALI,Current Valuation,PEG (Forward),13430,0.46
+AALI,Per Share,Current EPS (TTM),13200,764.65
+AALI,Per Share,Current EPS (Annualised),12988,764.65
+AALI,Per Share,Revenue Per Share (TTM),15880,"14,887.94"
+AALI,Per Share,Cash Per Share (Quarter),15879,"1,431.77"
+AALI,Per Share,Current Book Value Per Share,15718,"12,238.94"
+AALI,Per Share,Free Cashflow Per Share (TTM),15882,"1,781.38"
+AALI,Solvency,Current Ratio (Quarter),1498,4.33
+AALI,Solvency,Quick Ratio (Quarter),1500,2.71
+AALI,Solvency,Debt to Equity Ratio (Quarter),1508,-
+AALI,Solvency,LT Debt/Equity (Quarter),1504,-
+AALI,Solvency,Total Liabilities/Equity (Quarter),1573,0.12
+AALI,Solvency,Total Debt/Total Assets (Quarter),1512,-
+AALI,Solvency,Financial Leverage (Quarter),1502,1.15
+AALI,Solvency,Interest Coverage (TTM),1484,17.36
+AALI,Solvency,Free cash flow (Quarter),2536,"(1,896 B)"
+AALI,Solvency,Altman Z-Score (Modified),13402,13.04
+AALI,Management Effectiveness,Return on Assets (TTM),1460,5.44%
+AALI,Management Effectiveness,Return on Equity (TTM),1461,6.25%
+AALI,Management Effectiveness,Return on Capital Employed (TTM),1462,9.73%
+AALI,Management Effectiveness,Return On Invested Capital (TTM),13447,6.96%
+AALI,Management Effectiveness,Days Sales Outstanding (Quarter),1432,11.58
+AALI,Management Effectiveness,Days Inventory (Quarter),1435,52.28
+AALI,Management Effectiveness,Days Payables Outstanding (Quarter),1439,15.09
+AALI,Management Effectiveness,Cash Conversion Cycle (Quarter),1442,48.77
+AALI,Management Effectiveness,Receivables Turnover (Quarter),1445,7.86
+AALI,Management Effectiveness,Asset Turnover (TTM),1467,1.04
+AALI,Management Effectiveness,Inventory Turnover (TTM),1465,8.09
+AALI,Profitability,Gross Profit Margin (Quarter),1561,20.94%
+AALI,Profitability,Operating Profit Margin (Quarter),1562,13.12%
+AALI,Profitability,Net Profit Margin (Quarter),1563,6.14%
+AALI,Growth,Revenue (Quarter YoY Growth),1554,18.23%
+AALI,Growth,Gross Profit (Quarter YoY Growth),3008,2.56%
+AALI,Growth,Net Income (Quarter YoY Growth),18214,15.94%
+AALI,Dividend,Dividend,2913,123.00
+AALI,Dividend,Dividend (TTM),12722,307.00
+AALI,Dividend,Payout Ratio,2916,40.15%
+AALI,Dividend,Dividend Yield,2915,3.95%
+AALI,Dividend,Latest Dividend Ex-Date,20292,03 Oct 25
+AALI,Market Rank,Piotroski F-Score,13366,9.00
+AALI,Market Rank,EPS Rating,13382,-
+AALI,Market Rank,Relative Strength Rating,13387,69.00%
+AALI,Market Rank,Rank (Market Cap),13423,87.00%
+AALI,Market Rank,Rank (Current PE Ratio TTM),13426,69.00%
+AALI,Market Rank,Rank (Earnings Yield),13424,76.00%
+AALI,Market Rank,Rank (P/S),13420,78.00%
+AALI,Market Rank,Rank (P/B),13421,75.00%
+AALI,Market Rank,Rank (Near 52 Weeks High),13422,84.00%
+AALI,Income Statement,Revenue (TTM),2997,"28,655 B"
+AALI,Income Statement,Gross Profit (TTM),3007,"4,631 B"
+AALI,Income Statement,EBITDA (TTM),21456,"3,806 B"
+AALI,Income Statement,Net Income (TTM),1555,"1,472 B"
+AALI,Balance Sheet,Cash (Quarter),1557,"2,756 B"
+AALI,Balance Sheet,Total Assets (Quarter),1559,"27,047 B"
+AALI,Balance Sheet,Total Liabilities (Quarter),1560,"2,889 B"
+AALI,Balance Sheet,Working Capital (Quarter),1518,"6,662 B"
+AALI,Balance Sheet,Common Equity,15883,"23,556 B"
+AALI,Balance Sheet,Long-term Debt (Quarter),1524,-
+AALI,Balance Sheet,Short-term Debt (Quarter),1520,-
+AALI,Balance Sheet,Total Debt (Quarter),1486,-
+AALI,Balance Sheet,Net Debt (Quarter),1488,"(2,756 B)"
+AALI,Balance Sheet,Total Equity,21544,"24,158 B"
+AALI,Cash Flow Statement,Cash From Operations (TTM),2545,"4,211 B"
+AALI,Cash Flow Statement,Cash From Investing (TTM),2544,(782 B)
+AALI,Cash Flow Statement,Cash From Financing (TTM),2543,"(3,963 B)"
+AALI,Cash Flow Statement,Capital expenditure (TTM),2534,(782 B)
+AALI,Cash Flow Statement,Free cash flow (TTM),2538,"3,429 B"
+AALI,Price Performance,1 Week Price Returns,14812,5.78%
+AALI,Price Performance,3 Month Price Returns,1565,5.42%
+AALI,Price Performance,1 Month Price Returns,1564,5.07%
+AALI,Price Performance,6 Month Price Returns,1566,-2.20%
+AALI,Price Performance,1 Year Price Returns,1567,38.84%
+AALI,Price Performance,3 Year Price Returns,1568,-4.01%
+AALI,Price Performance,5 Year Price Returns,18172,-24.51%
+AALI,Price Performance,10 Year Price Returns,18173,-55.04%
+AALI,Price Performance,Year to Date Price Returns,1569,5.42%
+AALI,Price Performance,52 Week High,1570,"9,000.00"
+AALI,Price Performance,52 Week Low,1571,"5,200.00"
+...............................................................................
+...............................................................................
+...............................................................................
+ZYRX,Current Valuation,Current PE Ratio (Annualised),12148,4.41
+ZYRX,Current Valuation,Current PE Ratio (TTM),2891,4.41
+ZYRX,Current Valuation,Forward PE Ratio,16577,-
+ZYRX,Current Valuation,IHSG PE Ratio TTM (Median),13427,9.14
+ZYRX,Current Valuation,Earnings Yield (TTM),2898,22.69%
+ZYRX,Current Valuation,Current Price to Sales (TTM),2893,0.16
+ZYRX,Current Valuation,Current Price to Book Value,2896,0.56
+ZYRX,Current Valuation,Current Price To Cashflow (TTM),16533,-1.30
+ZYRX,Current Valuation,Current Price To Free Cashflow (TTM),15881,-1.13
+ZYRX,Current Valuation,EV to EBIT (TTM),2897,6.69
+ZYRX,Current Valuation,EV to EBITDA (TTM),21457,15.96
+ZYRX,Current Valuation,PEG Ratio,13431,0.02
+ZYRX,Current Valuation,PEG Ratio (3yr),13432,-0.25
+ZYRX,Current Valuation,PEG (Forward),13430,-
+ZYRX,Per Share,Current EPS (TTM),13200,32.67
+ZYRX,Per Share,Current EPS (Annualised),12988,32.67
+ZYRX,Per Share,Revenue Per Share (TTM),15880,882.04
+ZYRX,Per Share,Cash Per Share (Quarter),15879,3.40
+ZYRX,Per Share,Current Book Value Per Share,15718,256.10
+ZYRX,Per Share,Free Cashflow Per Share (TTM),15882,-127.29
+ZYRX,Solvency,Current Ratio (Quarter),1498,1.22
+ZYRX,Solvency,Quick Ratio (Quarter),1500,0.94
+ZYRX,Solvency,Debt to Equity Ratio (Quarter),1508,0.78
+ZYRX,Solvency,LT Debt/Equity (Quarter),1504,-
+ZYRX,Solvency,Total Liabilities/Equity (Quarter),1573,2.43
+ZYRX,Solvency,Total Debt/Total Assets (Quarter),1512,0.23
+ZYRX,Solvency,Financial Leverage (Quarter),1502,3.43
+ZYRX,Solvency,Interest Coverage (TTM),1484,10.36
+ZYRX,Solvency,Free cash flow (Quarter),2536,(118 B)
+ZYRX,Solvency,Altman Z-Score (Modified),13402,2.49
+ZYRX,Management Effectiveness,Return on Assets (TTM),1460,3.72%
+ZYRX,Management Effectiveness,Return on Equity (TTM),1461,12.76%
+ZYRX,Management Effectiveness,Return on Capital Employed (TTM),1462,20.65%
+ZYRX,Management Effectiveness,Return On Invested Capital (TTM),13447,9.46%
+ZYRX,Management Effectiveness,Days Sales Outstanding (Quarter),1432,36.90
+ZYRX,Management Effectiveness,Days Inventory (Quarter),1435,26.86
+ZYRX,Management Effectiveness,Days Payables Outstanding (Quarter),1439,34.03
+ZYRX,Management Effectiveness,Cash Conversion Cycle (Quarter),1442,29.73
+ZYRX,Management Effectiveness,Receivables Turnover (Quarter),1445,2.47
+ZYRX,Management Effectiveness,Asset Turnover (TTM),1467,1.39
+ZYRX,Management Effectiveness,Inventory Turnover (TTM),1465,4.19
+ZYRX,Profitability,Gross Profit Margin (Quarter),1561,11.69%
+ZYRX,Profitability,Operating Profit Margin (Quarter),1562,6.67%
+ZYRX,Profitability,Net Profit Margin (Quarter),1563,4.55%
+ZYRX,Growth,Revenue (Quarter YoY Growth),1554,504.42%
+ZYRX,Growth,Gross Profit (Quarter YoY Growth),3008,196.06%
+ZYRX,Growth,Net Income (Quarter YoY Growth),18214,185.17%
+ZYRX,Dividend,Dividend,2913,1.71
+ZYRX,Dividend,Dividend (TTM),12722,1.71
+ZYRX,Dividend,Payout Ratio,2916,5.23%
+ZYRX,Dividend,Dividend Yield,2915,1.19%
+ZYRX,Dividend,Latest Dividend Ex-Date,20292,17 Jun 25
+ZYRX,Market Rank,Piotroski F-Score,13366,4.00
+ZYRX,Market Rank,EPS Rating,13382,-
+ZYRX,Market Rank,Relative Strength Rating,13387,39.00%
+ZYRX,Market Rank,Rank (Market Cap),13423,18.00%
+ZYRX,Market Rank,Rank (Current PE Ratio TTM),13426,97.00%
+ZYRX,Market Rank,Rank (Earnings Yield),13424,98.00%
+ZYRX,Market Rank,Rank (P/S),13420,95.00%
+ZYRX,Market Rank,Rank (P/B),13421,80.00%
+ZYRX,Market Rank,Rank (Near 52 Weeks High),13422,62.00%
+ZYRX,Income Statement,Revenue (TTM),2997,"1,176 B"
+ZYRX,Income Statement,Gross Profit (TTM),3007,147 B
+ZYRX,Income Statement,EBITDA (TTM),21456,28 B
+ZYRX,Income Statement,Net Income (TTM),1555,44 B
+ZYRX,Balance Sheet,Cash (Quarter),1557,5 B
+ZYRX,Balance Sheet,Total Assets (Quarter),1559,"1,172 B"
+ZYRX,Balance Sheet,Total Liabilities (Quarter),1560,830 B
+ZYRX,Balance Sheet,Working Capital (Quarter),1518,180 B
+ZYRX,Balance Sheet,Common Equity,15883,341 B
+ZYRX,Balance Sheet,Long-term Debt (Quarter),1524,1 B
+ZYRX,Balance Sheet,Short-term Debt (Quarter),1520,266 B
+ZYRX,Balance Sheet,Total Debt (Quarter),1486,267 B
+ZYRX,Balance Sheet,Net Debt (Quarter),1488,263 B
+ZYRX,Balance Sheet,Total Equity,21544,341 B
+ZYRX,Cash Flow Statement,Cash From Operations (TTM),2545,(147 B)
+ZYRX,Cash Flow Statement,Cash From Investing (TTM),2544,(64 B)
+ZYRX,Cash Flow Statement,Cash From Financing (TTM),2543,210 B
+ZYRX,Cash Flow Statement,Capital expenditure (TTM),2534,(22 B)
+ZYRX,Cash Flow Statement,Free cash flow (TTM),2538,(170 B)
+ZYRX,Price Performance,1 Week Price Returns,14812,3.60%
+ZYRX,Price Performance,3 Month Price Returns,1565,-13.25%
+ZYRX,Price Performance,1 Month Price Returns,1564,-1.37%
+ZYRX,Price Performance,6 Month Price Returns,1566,-5.26%
+ZYRX,Price Performance,1 Year Price Returns,1567,22.03%
+ZYRX,Price Performance,3 Year Price Returns,1568,-53.55%
+ZYRX,Price Performance,5 Year Price Returns,18172,-70.37%
+ZYRX,Price Performance,10 Year Price Returns,18173,-
+ZYRX,Price Performance,Year to Date Price Returns,1569,-12.20%
+ZYRX,Price Performance,52 Week High,1570,210.00
+ZYRX,Price Performance,52 Week Low,1571,101.00
