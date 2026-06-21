@@ -22,7 +22,7 @@ python3 workflows/build_canonical_raw.py \
 Kalau butuh download BI Rate juga:
 
 ```bash
-export BPS_API_KEY="cdc65504d0b176f0b763f2d8dcd855dd"
+export BPS_API_KEY=""
 
 python3 workflows/build_canonical_raw.py \
   --root . \
