@@ -1,0 +1,97 @@
+{
+  "financials": {
+    "exists": true,
+    "rows": 8279943,
+    "columns": 15,
+    "tickers": 957,
+    "date_min": "2006-12-31",
+    "date_max": "2026-05-30",
+    "missing_top": {
+      "value_idr": 3103912,
+      "value_usd": 3103912,
+      "value_pct": 17532,
+      "ticker": 0,
+      "report_type_id": 0,
+      "report_type_name": 0,
+      "statement_type_id": 0,
+      "statement_type_name": 0,
+      "period_label": 0,
+      "period_display": 0
+    }
+  },
+  "keystats_ratios": {
+    "exists": true,
+    "rows": 86663,
+    "columns": 9,
+    "tickers": 957,
+    "date_min": "2026-06-12",
+    "date_max": "2026-06-12",
+    "missing_top": {
+      "value_num": 12216,
+      "value_raw": 11606,
+      "ticker": 0,
+      "snapshot_date": 0,
+      "category": 0,
+      "category_key": 0,
+      "metric_name": 0,
+      "metric_key": 0,
+      "metric_id": 0
+    }
+  },
+  "keystats_quarterly": {
+    "exists": true,
+    "rows": 189326,
+    "columns": 21,
+    "tickers": 957,
+    "date_min": "2018-09-30",
+    "date_max": "2026-06-30",
+    "missing_top": {
+      "dividend": 144498,
+      "dividend_num": 144498,
+      "dividend_yield": 123770,
+      "dividend_yield_num": 123770,
+      "payout_ratio": 123698,
+      "payout_ratio_num": 123698,
+      "ttm_value": 25842,
+      "ttm_value_num": 25842,
+      "quarter_value": 15697,
+      "quarter_value_num": 15697
+    }
+  },
+  "keystats_dividends": {
+    "exists": true,
+    "rows": 2627,
+    "columns": 6,
+    "tickers": 957,
+    "date_min": "2021-01-06",
+    "date_max": "2026-07-15",
+    "missing_top": {
+      "dividend": 472,
+      "ex_date": 472,
+      "payment_date": 472,
+      "ticker": 0,
+      "period": 0,
+      "source_file": 0
+    }
+  },
+  "insider_activity": {
+    "exists": true,
+    "rows": 94780,
+    "columns": 31,
+    "tickers": 953,
+    "date_min": "2017-10-12",
+    "date_max": "2026-06-13",
+    "missing_top": {
+      "trade_value": 76282,
+      "broker_code": 53622,
+      "insider_name": 181,
+      "id": 0,
+      "date": 0,
+      "ticker": 0,
+      "action_type": 0,
+      "shares_changed": 0,
+      "shares_changed_pct": 0,
+      "prev_shares": 0
+    }
+  }
+}

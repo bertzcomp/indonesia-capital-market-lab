@@ -1,0 +1,57 @@
+{
+  "engine": "polars",
+  "available_date_lag_days": {
+    "Quarterly": 60,
+    "Annual": 120,
+    "TTM": 7,
+    "LTM": 7,
+    "Interim YTD": 60
+  },
+  "insider_windows_days": [
+    7,
+    14,
+    30,
+    60,
+    90,
+    180
+  ],
+  "label_horizons_days": [
+    20,
+    60,
+    120
+  ],
+  "outperform_threshold": 0.05,
+  "top_n_default": 50,
+  "score_weights": {
+    "quality": 0.2,
+    "growth": 0.2,
+    "valuation": 0.2,
+    "insider": 0.15,
+    "balance_sheet": 0.15,
+    "dividend": 0.05,
+    "liquidity": 0.05
+  },
+  "bad_drawdown_threshold": 0.15,
+  "takeprofit_threshold": 0.2,
+  "universe_modes": {
+    "research_all": {
+      "min_avg_value_20d": 0
+    },
+    "tradable": {
+      "min_avg_value_20d": 1000000000
+    },
+    "liquid": {
+      "min_avg_value_20d": 5000000000
+    },
+    "strict_liquid": {
+      "min_avg_value_20d": 10000000000
+    }
+  },
+  "model_redesign": {
+    "primary_horizon": 60,
+    "rank_target_template": "fwd_risk_adjusted_excess_sector_{h}d",
+    "classifier_target_template": "label_outperform_sector_{h}d",
+    "risk_target_template": "label_bad_drawdown_{h}d",
+    "purge_days": 60
+  }
+}
